@@ -96,6 +96,15 @@ git ls-remote https://github.com/NousResearch/hermes-agent.git HEAD
 
 ## Pitfalls / 坑
 
+- **npm 原生依赖从 GitHub 下载失败**：用 node-pre-gyp 的包（如 `get-windows`）安装时会从 GitHub Releases 下载预编译二进制，直连被墙→安装失败；若包在 `optionalDependencies` 里，npm 会**静默跳过**，构建到 `stage-native-deps` 才 fail-closed 报 "X is not installed"。修复：
+  ```bash
+  # 1. 查包的 binary 配置得到下载 URL 模式（npm view <pkg> binary）
+  # 2. 用镜像下载预编译包：curl -L -o x.tar.gz "https://ghfast.top/<原下载URL>"
+  # 3. 装包时跳过下载脚本：npm install <pkg> --ignore-scripts
+  # 4. 手动解压二进制到包内 module_path（如 node_modules/<pkg>/lib/binding/napi-9-win32-unknown-x64/）
+  ```
+  参考实例：Hermes desktop 的 `get-windows@9.3.0`（win32-x64 的 `napi-9-win32-unknown-x64.tar.gz`，直连 21s 超时、镜像 5s 200）。
+- **桌面版打包 EBUSY**：`electron-builder` 重打包时若 Hermes 桌面版正在运行，会锁 `release/win-unpacked/` 下的文件报 `EBUSY: resource busy or locked`。属正常——更新流程会先停应用再打包。
 - `api.github.com` 时好时坏 ≠ 完全不可用：先测两次再下结论；`curl` 一次 000 可能是瞬断
 - `git describe --tags` 报 "No names found" = 本地缺 tag，会导致更新说明链接生成失败；`git fetch origin` 可补拉 tag（走镜像后 fetch 也走镜像）
 - hermes update 的 behind-count 走 `api.github.com`，属 best-effort，失败不影响更新主流程
